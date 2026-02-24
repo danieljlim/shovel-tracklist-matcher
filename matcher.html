@@ -674,6 +674,10 @@
 
     function playTrack(entry) {
       if (!ytReady) return;
+      if (playlist.indexOf(entry) === currentPlaylistIdx && isPlaying) {
+        ytPlayer.pauseVideo();
+        return;
+      }
       ytPlayer.loadVideoById(entry.videoId);
       currentPlaylistIdx = playlist.indexOf(entry);
       isPlaying = true;
