@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Tracklist Matcher — Receipt</title>
+  <link rel="icon" href="/favicon.ico" sizes="32x32">
+  <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #1a1917;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      padding: 40px 16px 80px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Receipt paper ── */
+    .receipt {
+      width: 100%;
+      max-width: 440px;
+      background: #f5f2ed;
+      color: #1a1a18;
+      font-family: 'VT323', monospace;
+      font-size: 18px;
+      line-height: 1.5;
+      padding: 32px 28px 48px;
+      position: relative;
+      box-shadow:
+        2px 2px 8px rgba(0,0,0,0.3),
+        -2px 0 8px rgba(0,0,0,0.15),
+        0 4px 16px rgba(0,0,0,0.2);
+      text-transform: uppercase;
+    }
+
+    /* Torn bottom edge */
+    .receipt::after {
+      content: '';
+      position: absolute;
+      bottom: -12px;
+      left: 0;
+      right: 0;
+      height: 12px;
+      background: #f5f2ed;
+      clip-path: polygon(
+        0% 0%, 3% 100%, 6% 0%, 9% 100%, 12% 0%, 15% 100%, 18% 0%, 21% 100%,
+        24% 0%, 27% 100%, 30% 0%, 33% 100%, 36% 0%, 39% 100%, 42% 0%, 45% 100%,
+        48% 0%, 51% 100%, 54% 0%, 57% 100%, 60% 0%, 63% 100%, 66% 0%, 69% 100%,
+        72% 0%, 75% 100%, 78% 0%, 81% 100%, 84% 0%, 87% 100%, 90% 0%, 93% 100%,
+        96% 0%, 100% 100%, 100% 0%
+      );
+    }
+
+    /* ── Header ── */
+    .receipt-header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .receipt-title {
+      font-size: 28px;
+      letter-spacing: 0.08em;
+      margin-bottom: 2px;
+    }
+
+    .receipt-subtitle {
+      font-size: 18px;
+      color: #555;
+    }
+
+    .receipt-url {
+      font-size: 16px;
+      color: #777;
+      margin-top: 4px;
+    }
+
+    .receipt-date {
+      font-size: 16px;
+      color: #777;
+      margin-top: 2px;
+    }
+
+    /* ── Dividers ── */
+    .divider {
+      border: none;
+      border-top: 1px dashed #999;
+      margin: 16px 0;
+    }
+
+    .divider-double {
+      border: none;
+      border-top: 2px solid #333;
+      margin: 16px 0;
+    }
+
+    /* ── Textarea (on the paper) ── */
+    .receipt-input-label {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+
+    .receipt-textarea {
+      width: 100%;
+      height: 200px;
+      background: #ede9e3;
+      border: 1px solid #ccc;
+      color: #1a1a18;
+      font-family: 'VT323', monospace;
+      font-size: 18px;
+      line-height: 1.5;
+      padding: 12px;
+      text-transform: uppercase;
+      resize: none;
+    }
+    .receipt-textarea:focus {
+      outline: none;
+      border-color: #999;
+    }
+    .receipt-textarea::placeholder {
+      color: #aaa;
+    }
+
+    /* ── Match button ── */
+    .receipt-btn {
+      display: block;
+      width: 100%;
+      margin-top: 12px;
+      padding: 10px 0;
+      background: #1a1a18;
+      color: #f5f2ed;
+      border: none;
+      font-family: 'VT323', monospace;
+      font-size: 22px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .receipt-btn:hover { opacity: 0.85; }
+    .receipt-btn:active { transform: scale(0.99); }
+    .receipt-btn:disabled { opacity: 0.3; cursor: default; transform: none; }
+
+    .receipt-hint {
+      text-align: center;
+      font-size: 14px;
+      color: #999;
+      margin-top: 6px;
+    }
+
+    /* ── Results section ── */
+    .receipt-results {
+      display: none;
+    }
+    .receipt-results.visible {
+      display: block;
+    }
+
+    .results-header-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 16px;
+      color: #555;
+    }
+
+    /* ── Result items ── */
+    .receipt-item {
+      margin-bottom: 12px;
+      opacity: 0;
+      transform: translateY(6px);
+      animation: printIn 0.3s ease forwards;
+    }
+
+    @keyframes printIn {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .item-num {
+      font-size: 18px;
+      color: #1a1a18;
+    }
+
+    .item-track {
+      font-size: 18px;
+      color: #1a1a18;
+    }
+
+    .item-match {
+      padding-left: 24px;
+      font-size: 16px;
+      color: #555;
+    }
+
+    .item-match-artist {
+      color: #333;
+    }
+
+    .item-match-release {
+      color: #555;
+    }
+
+    .item-match-label {
+      color: #777;
+    }
+
+    .item-play {
+      display: inline;
+      cursor: pointer;
+      color: #1a1a18;
+      font-size: 16px;
+      margin-left: 12px;
+      transition: opacity 0.15s;
+      float: right;
+    }
+    .item-play:hover { opacity: 0.6; }
+    .item-play.active { color: #333; }
+
+    .item-no-match {
+      padding-left: 24px;
+      font-size: 16px;
+      color: #999;
+    }
+
+    .item-link {
+      color: inherit;
+      text-decoration: none;
+    }
+    .item-link:hover {
+      text-decoration: underline;
+    }
+
+    /* ── Summary ── */
+    .receipt-summary {
+      font-size: 18px;
+      opacity: 0;
+      animation: printIn 0.3s ease forwards;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* ── Player section (on receipt) ── */
+    .receipt-player {
+      display: none;
+      opacity: 0;
+      animation: printIn 0.3s ease forwards;
+    }
+    .receipt-player.visible {
+      display: block;
+    }
+
+    .player-label {
+      font-size: 16px;
+      color: #555;
+      margin-bottom: 4px;
+    }
+
+    .player-now-playing {
+      font-size: 18px;
+      color: #1a1a18;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .progress-bar {
+      font-size: 18px;
+      color: #1a1a18;
+      letter-spacing: 0;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .progress-blocks {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .progress-time {
+      flex-shrink: 0;
+      font-size: 16px;
+      color: #555;
+    }
+
+    /* ── Footer ── */
+    .receipt-footer {
+      text-align: center;
+      font-size: 18px;
+      color: #555;
+      margin-top: 8px;
+    }
+
+    /* ── New search button ── */
+    .receipt-new-search {
+      display: none;
+      width: 100%;
+      margin-top: 16px;
+      padding: 8px 0;
+      background: transparent;
+      color: #777;
+      border: 1px dashed #ccc;
+      font-family: 'VT323', monospace;
+      font-size: 18px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .receipt-new-search.visible { display: block; }
+    .receipt-new-search:hover { color: #333; border-color: #999; }
+
+    /* ── Status (loading) ── */
+    .receipt-status {
+      text-align: center;
+      font-size: 16px;
+      color: #777;
+    }
+    .receipt-status.loading {
+      animation: breathe 1.4s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    /* ── Hidden YouTube host ── */
+    #yt-player-host {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      left: -9999px;
+      top: -9999px;
+      overflow: hidden;
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 500px) {
+      body { padding: 20px 8px 60px; }
+
+      .receipt {
+        padding: 24px 18px 40px;
+        font-size: 18px;
+      }
+
+      .receipt-title { font-size: 24px; }
+
+      .receipt-textarea {
+        height: 180px;
+        font-size: 16px; /* prevent iOS zoom */
+      }
+
+      .receipt-hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="receipt" id="receipt">
+    <!-- Header -->
+    <div class="receipt-header">
+      <div class="receipt-title">Tracklist Matcher</div>
+      <div class="receipt-subtitle">Shovel for Discogs</div>
+      <div class="receipt-url">matcher.shovelfordiscogs.com</div>
+      <div class="receipt-date" id="receipt-date"></div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Input section -->
+    <div id="input-section">
+      <div class="receipt-input-label">Paste tracklist below:</div>
+      <textarea id="input" class="receipt-textarea" placeholder="Paste tracklist here..."></textarea>
+      <button id="submit" class="receipt-btn" onclick="doMatch()">████ &nbsp;MATCH&nbsp; ████</button>
+      <div class="receipt-hint"><kbd id="shortcut-key"></kbd> to match</div>
+    </div>
+
+    <!-- Status -->
+    <div id="status" class="receipt-status" style="display:none"></div>
+
+    <!-- Results section -->
+    <div id="results-section" class="receipt-results">
+      <hr class="divider-double">
+
+      <div class="results-header-row">
+        <span>#&nbsp; ITEM</span>
+        <span>RESULT</span>
+      </div>
+
+      <hr class="divider">
+
+      <div id="results-list"></div>
+
+      <!-- Summary -->
+      <div id="results-summary" style="display:none"></div>
+    </div>
+
+    <!-- Player (on the receipt) -->
+    <div id="receipt-player" class="receipt-player">
+      <hr class="divider">
+      <div class="player-label">&gt;&gt; Now playing:</div>
+      <div id="player-now-playing" class="player-now-playing"></div>
+      <div class="progress-bar" id="player-bar-area">
+        <span class="progress-blocks" id="progress-blocks"></span>
+        <span class="progress-time" id="player-time">0:00</span>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div id="receipt-footer" class="receipt-footer" style="display:none">
+      <hr class="divider">
+      Thank you for digging
+    </div>
+
+    <!-- New search -->
+    <button id="new-search" class="receipt-new-search" onclick="newSearch()">[ New search ]</button>
+  </div>
+
+  <div id="yt-player-host"><div id="yt-player"></div></div>
+
+  <script>
+    const API = "https://api.shovelfordiscogs.com";
+
+    // Set receipt date
+    const now = new Date();
+    document.getElementById("receipt-date").textContent =
+      now.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "/") +
+      "  " + now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+    /* ── YouTube IFrame API ── */
+    let ytPlayer = null;
+    let ytReady = false;
+    let progressInterval = null;
+
+    const ytApi = document.createElement("script");
+    ytApi.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(ytApi);
+
+    window.onYouTubeIframeAPIReady = function () {
+      ytPlayer = new YT.Player("yt-player", {
+        height: "1",
+        width: "1",
+        playerVars: { playsinline: 1, controls: 0 },
+        events: {
+          onReady: () => { ytReady = true; },
+          onStateChange: onYTStateChange,
+          onError: () => { playNext(); },
+        },
+      });
+    };
+
+    function onYTStateChange(e) {
+      if (e.data === YT.PlayerState.PLAYING) {
+        isPlaying = true;
+        startProgressTimer();
+      } else if (e.data === YT.PlayerState.PAUSED) {
+        isPlaying = false;
+        stopProgressTimer();
+      } else if (e.data === YT.PlayerState.ENDED) {
+        stopProgressTimer();
+        playNext();
+      }
+    }
+
+    function startProgressTimer() {
+      stopProgressTimer();
+      progressInterval = setInterval(updateProgressBar, 250);
+    }
+
+    function stopProgressTimer() {
+      if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
+    }
+
+    function updateProgressBar() {
+      if (!ytPlayer || !ytPlayer.getCurrentTime) return;
+      const cur = ytPlayer.getCurrentTime();
+      const dur = ytPlayer.getDuration();
+      if (dur <= 0) return;
+
+      const pct = cur / dur;
+      const totalBlocks = 24;
+      const filled = Math.round(pct * totalBlocks);
+      const bar = "\u2588".repeat(filled) + "\u2591".repeat(totalBlocks - filled);
+      document.getElementById("progress-blocks").textContent = "[" + bar + "]";
+      document.getElementById("player-time").textContent = formatTime(cur);
+    }
+
+    /* ── Player state ── */
+    let playlist = [];
+    let currentPlaylistIdx = -1;
+    let isPlaying = false;
+
+    function extractVideoId(uri) {
+      try {
+        const url = new URL(uri);
+        return url.searchParams.get("v");
+      } catch { return null; }
+    }
+
+    function formatTime(seconds) {
+      const s = Math.floor(seconds);
+      return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+    }
+
+    function playTrack(entry) {
+      if (!ytReady) return;
+      ytPlayer.loadVideoById(entry.videoId);
+      currentPlaylistIdx = playlist.indexOf(entry);
+      isPlaying = true;
+
+      // Show player section
+      const playerEl = document.getElementById("receipt-player");
+      playerEl.classList.add("visible");
+      document.getElementById("player-now-playing").textContent =
+        entry.trackName;
+
+      const totalBlocks = 24;
+      document.getElementById("progress-blocks").textContent =
+        "[" + "\u2591".repeat(totalBlocks) + "]";
+      document.getElementById("player-time").textContent = "0:00";
+
+      updatePlayIcons();
+    }
+
+    function updatePlayIcons() {
+      document.querySelectorAll(".item-play").forEach(el => {
+        const idx = Number(el.dataset.playlistIdx);
+        el.textContent = idx === currentPlaylistIdx ? "[\u25b6]" : "[>]";
+        el.classList.toggle("active", idx === currentPlaylistIdx);
+      });
+    }
+
+    function playNext() {
+      const next = currentPlaylistIdx + 1;
+      if (next < playlist.length) {
+        playTrack(playlist[next]);
+      } else {
+        isPlaying = false;
+      }
+    }
+
+    // Play/pause on progress bar click
+    document.getElementById("player-bar-area").addEventListener("click", () => {
+      if (!ytPlayer || !ytPlayer.getPlayerState) return;
+      const state = ytPlayer.getPlayerState();
+      if (state === YT.PlayerState.PLAYING) {
+        ytPlayer.pauseVideo();
+      } else {
+        ytPlayer.playVideo();
+      }
+    });
+
+    /* ── New search ── */
+    function newSearch() {
+      playlist = [];
+      currentPlaylistIdx = -1;
+      isPlaying = false;
+      stopProgressTimer();
+      if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
+
+      // Hide results / player / footer
+      document.getElementById("results-section").classList.remove("visible");
+      document.getElementById("receipt-player").classList.remove("visible");
+      document.getElementById("receipt-footer").style.display = "none";
+      document.getElementById("results-summary").style.display = "none";
+      document.getElementById("new-search").classList.remove("visible");
+      document.getElementById("status").style.display = "none";
+      document.getElementById("results-list").innerHTML = "";
+
+      // Show input
+      document.getElementById("input-section").style.display = "block";
+      document.getElementById("input").focus();
+
+      // Scroll to top
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    /* ── Match logic ── */
+    async function doMatch() {
+      const text = document.getElementById("input").value.trim();
+      if (!text) return;
+
+      const btn = document.getElementById("submit");
+      const statusEl = document.getElementById("status");
+      const resultsList = document.getElementById("results-list");
+      const resultsSection = document.getElementById("results-section");
+      const summary = document.getElementById("results-summary");
+
+      btn.disabled = true;
+      resultsList.innerHTML = "";
+      playlist = [];
+      currentPlaylistIdx = -1;
+
+      // Hide input, show status
+      document.getElementById("input-section").style.display = "none";
+      statusEl.style.display = "block";
+      statusEl.textContent = "Cleaning tracklist\u2026";
+      statusEl.classList.add("loading");
+      summary.style.display = "none";
+      document.getElementById("receipt-footer").style.display = "none";
+      document.getElementById("receipt-player").classList.remove("visible");
+      document.getElementById("new-search").classList.remove("visible");
+
+      const t0 = Date.now();
+      let totalTracks = 0;
+      let matchedCount = 0;
+
+      try {
+        const res = await fetch(`${API}/tracklist/match`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          statusEl.textContent = data.error || "Something went wrong";
+          statusEl.classList.remove("loading");
+          btn.disabled = false;
+          return;
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let slots = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const msg = JSON.parse(line);
+
+            if (msg.type === "error") {
+              statusEl.textContent = msg.error;
+              statusEl.classList.remove("loading");
+              btn.disabled = false;
+              return;
+            }
+
+            if (msg.type === "cleaned") {
+              totalTracks = msg.total;
+              statusEl.textContent = `Matching\u2026 0/${msg.total}`;
+
+              // Show results section
+              resultsSection.classList.add("visible");
+
+              // Pre-create slots for each track
+              slots = msg.lines.map((l, i) => {
+                const isUnknown = l === "?";
+                return { line: l, isUnknown, el: null };
+              });
+            }
+
+            if (msg.type === "result") {
+              const slot = slots[msg.index];
+              if (!slot || slot.isUnknown || msg.input === "?") continue;
+
+              // Create and append result item with stagger
+              const itemEl = document.createElement("div");
+              itemEl.className = "receipt-item";
+              itemEl.style.animationDelay = `${resultsList.children.length * 80}ms`;
+              itemEl.innerHTML = renderReceiptItem(msg, msg.index);
+              resultsList.appendChild(itemEl);
+              slot.el = itemEl;
+
+              // Wire up play button
+              const videoMatch = msg.matches.find(m => m.video && m.video.uri && extractVideoId(m.video.uri));
+              if (videoMatch) {
+                const vid = extractVideoId(videoMatch.video.uri);
+                if (vid) {
+                  const entry = { index: msg.index, videoId: vid, trackName: msg.input || videoMatch.track_title };
+                  const pIdx = playlist.push(entry) - 1;
+                  const playBtn = itemEl.querySelector(".item-play");
+                  if (playBtn) {
+                    playBtn.dataset.playlistIdx = pIdx;
+                    playBtn.addEventListener("click", (e) => {
+                      e.stopPropagation();
+                      playTrack(entry);
+                    });
+                  }
+                }
+              }
+
+              if (msg.total != null) {
+                matchedCount = msg.matched;
+                const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+                statusEl.textContent = `Matching\u2026 ${msg.matched}/${msg.total} \u00b7 ${elapsed}s`;
+              }
+            }
+
+            if (msg.type === "done") {
+              const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+              matchedCount = msg.matched;
+              totalTracks = msg.total;
+              statusEl.style.display = "none";
+              statusEl.classList.remove("loading");
+
+              // Sort playlist
+              playlist.sort((a, b) => a.index - b.index);
+
+              // Show summary
+              const missed = totalTracks - matchedCount;
+              summary.style.display = "block";
+              summary.innerHTML = `
+                <hr class="divider">
+                <div class="receipt-summary">
+                  <div class="summary-row"><span>SUBTOTAL:</span><span>${matchedCount} MATCHED</span></div>
+                  <div class="summary-row"><span>MISSED:</span><span>${missed}</span></div>
+                  <div class="summary-row"><span>TIME:</span><span>${elapsed}s</span></div>
+                </div>
+                <hr class="divider-double">
+              `;
+
+              // Show footer + new search
+              document.getElementById("receipt-footer").style.display = "block";
+              document.getElementById("new-search").classList.add("visible");
+            }
+          }
+        }
+      } catch (err) {
+        statusEl.textContent = err.message;
+        statusEl.classList.remove("loading");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function renderReceiptItem(r, idx) {
+      const num = String(idx + 1).padStart(2, "0");
+      const trackName = esc(r.input || "?");
+
+      if (r.error || r.matches.length === 0) {
+        return `
+          <div class="item-num">${num} ${trackName}</div>
+          <div class="item-no-match">&gt; ** NO MATCH **</div>
+        `;
+      }
+
+      const m = r.matches[0]; // Best match
+      const url = `https://www.discogs.com/release/${m.release_id}`;
+      const hasVideo = m.video && m.video.uri && extractVideoId(m.video.uri);
+
+      const playBtn = hasVideo
+        ? `<span class="item-play" data-video-id="${extractVideoId(m.video.uri)}">[>]</span>`
+        : "";
+
+      // Play button floats right on the last line
+      let lastLine = "";
+      if (m.labels && m.labels.length > 0) {
+        lastLine = `<div class="item-match-label">${playBtn}${esc(m.labels[0])}</div>`;
+      } else {
+        lastLine = `<div class="item-match-release">${playBtn}<a class="item-link" href="${url}" target="_blank">${esc(m.release_title)}</a></div>`;
+      }
+
+      const releaseLine = (m.labels && m.labels.length > 0)
+        ? `<div class="item-match-release"><a class="item-link" href="${url}" target="_blank">${esc(m.release_title)}</a></div>`
+        : "";
+
+      return `
+        <div class="item-num">${num} ${trackName}</div>
+        <div class="item-match">
+          <div class="item-match-artist">&gt; <a class="item-link" href="${url}" target="_blank">${esc(m.artist_name)}</a></div>
+          ${releaseLine}
+          ${lastLine}
+        </div>
+      `;
+    }
+
+    function esc(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    /* ── Keyboard shortcut ── */
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+    document.getElementById("shortcut-key").textContent = isMac ? "\u2318+Enter" : "Ctrl+Enter";
+
+    document.getElementById("input").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) doMatch();
+    });
+  </script>
+</body>
+</html>

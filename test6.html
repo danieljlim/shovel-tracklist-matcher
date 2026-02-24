@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Tracklist Matcher — Text Mode</title>
+  <link rel="icon" href="/favicon.ico" sizes="32x32">
+  <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #080808;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 32px 16px 80px;
+      -webkit-font-smoothing: none;
+      font-family: 'VT323', monospace;
+      font-size: 18px;
+      color: #33ff33;
+    }
+
+    /* ── CRT Screen ── */
+    .screen {
+      width: 100%;
+      max-width: 720px;
+      background: #0a0a0a;
+      border: 2px solid #1a5a1a;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      box-shadow:
+        inset 0 0 60px rgba(0,0,0,0.5),
+        0 0 20px rgba(51,255,51,0.05);
+    }
+
+    /* Scanline overlay */
+    .screen::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.12) 2px,
+        rgba(0,0,0,0.12) 4px
+      );
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Vignette overlay */
+    .screen::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%);
+      pointer-events: none;
+      z-index: 11;
+    }
+
+    /* Subtle flicker */
+    @keyframes flicker {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.97; }
+    }
+    .screen {
+      animation: flicker 4s ease-in-out infinite;
+    }
+
+    /* Phosphor bloom on all text */
+    .screen * {
+      text-shadow: 0 0 8px rgba(51,255,51,0.35);
+    }
+
+    /* ── Text colours ── */
+    .dim { color: #1a8a1a; text-shadow: 0 0 6px rgba(26,138,26,0.2); }
+    .bright { color: #66ff66; }
+    .warn { color: #ffaa00; text-shadow: 0 0 8px rgba(255,170,0,0.3); }
+
+    /* ── Header bar ── */
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+
+    .box-top { margin-bottom: 0; }
+    .box-bottom { margin-top: 0; }
+
+    /* ── Textarea ── */
+    .input-box {
+      margin: 12px 0;
+    }
+
+    .crt-textarea {
+      width: 100%;
+      height: 180px;
+      background: transparent;
+      border: none;
+      color: #33ff33;
+      font-family: 'VT323', monospace;
+      font-size: 18px;
+      line-height: 1.5;
+      padding: 8px 12px;
+      resize: none;
+      caret-color: #33ff33;
+      text-shadow: 0 0 8px rgba(51,255,51,0.35);
+    }
+    .crt-textarea:focus { outline: none; }
+    .crt-textarea::placeholder { color: #1a5a1a; }
+
+    /* ── Buttons ── */
+    .crt-btn {
+      background: transparent;
+      color: #33ff33;
+      border: 1px solid #33ff33;
+      font-family: 'VT323', monospace;
+      font-size: 18px;
+      padding: 4px 16px;
+      cursor: pointer;
+      text-shadow: 0 0 8px rgba(51,255,51,0.35);
+      transition: all 0.15s;
+    }
+    .crt-btn:hover {
+      background: #33ff33;
+      color: #080808;
+      text-shadow: none;
+    }
+    .crt-btn:active { transform: scale(0.98); }
+    .crt-btn:disabled { opacity: 0.3; cursor: default; }
+
+    .controls-row {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      margin-top: 8px;
+    }
+
+    .hint { font-size: 16px; }
+
+    /* ── Results table ── */
+    .results-section {
+      display: none;
+      margin-top: 12px;
+    }
+    .results-section.visible { display: block; }
+
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .result-row {
+      opacity: 0;
+      transform: translateY(3px);
+      animation: typeIn 0.25s ease forwards;
+    }
+
+    @keyframes typeIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .result-row-inner {
+      display: grid;
+      grid-template-columns: 36px 1fr 1fr;
+      gap: 0;
+      padding: 4px 0;
+    }
+
+    .row-sep {
+      color: #1a5a1a;
+      text-shadow: 0 0 4px rgba(26,138,26,0.15);
+      overflow: hidden;
+      white-space: nowrap;
+      line-height: 1.5;
+    }
+
+    .result-num {
+      color: #1a8a1a;
+    }
+
+    .result-track {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .result-match {
+      overflow: hidden;
+    }
+
+    .match-line {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .play-btn {
+      cursor: pointer;
+      color: #33ff33;
+      transition: color 0.15s;
+      user-select: none;
+    }
+    .play-btn:hover { color: #66ff66; }
+    .play-btn.active { color: #ffaa00; text-shadow: 0 0 8px rgba(255,170,0,0.4); }
+
+    .crt-link {
+      color: inherit;
+      text-decoration: none;
+    }
+    .crt-link:hover {
+      text-decoration: underline;
+    }
+
+    /* ── Player section ── */
+    .player-section {
+      display: none;
+      margin-top: 8px;
+    }
+    .player-section.visible { display: block; }
+
+    .player-track-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .player-progress-row {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* ── Status ── */
+    .status-text {
+      font-size: 18px;
+    }
+    .status-text.loading {
+      animation: crtBreathe 1.4s ease-in-out infinite;
+    }
+    @keyframes crtBreathe {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+
+    /* ── Hidden YouTube host ── */
+    #yt-player-host {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      left: -9999px;
+      top: -9999px;
+      overflow: hidden;
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 600px) {
+      body { padding: 12px 6px 60px; }
+      .screen { padding: 16px 12px; }
+      .crt-textarea {
+        font-size: 16px; /* prevent iOS zoom */
+        height: 150px;
+      }
+      .hint { display: none; }
+
+      .result-row-inner {
+        grid-template-columns: 1fr;
+      }
+      .result-num { display: none; }
+      .result-match { padding-left: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="screen">
+    <!-- Header -->
+    <div>&#x2554;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2557;</div>
+    <div class="header-row">
+      <span>&#x2551; TRACKLIST MATCHER v0.1</span>
+      <span>SHOVEL FOR DISCOGS &#x2551;</span>
+    </div>
+    <div>&#x2560;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2563;</div>
+
+    <!-- Input section -->
+    <div id="input-section">
+      <div style="margin: 8px 0">
+        <span>&#x2551;</span>
+      </div>
+      <div>&#x2551; &#x250C;&#x2500; INPUT &#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2510;</div>
+      <div style="display:flex">
+        <span>&#x2551; &#x2502;</span>
+        <textarea id="input" class="crt-textarea" placeholder="> Paste tracklist here..." style="flex:1"></textarea>
+        <span>&#x2502;</span>
+      </div>
+      <div>&#x2551; &#x2514;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2500;&#x2518;</div>
+      <div style="margin: 4px 0">
+        <span>&#x2551;</span>
+      </div>
+      <div class="controls-row">
+        <span>&#x2551;</span>
+        <button id="submit" class="crt-btn" onclick="doMatch()">[MATCH]</button>
+        <span class="dim hint"><kbd id="shortcut-key"></kbd></span>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div id="status-row" style="display:none">
+      <div style="margin: 4px 0">
+        <span>&#x2551;</span>
+        <span id="status-text" class="status-text"></span>
+      </div>
+    </div>
+
+    <!-- Results section -->
+    <div id="results-section" class="results-section">
+      <div>&#x2560;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2563;</div>
+      <div class="results-header">
+        <span>&#x2551; RESULTS</span>
+        <span id="results-status" class="dim"></span>
+      </div>
+
+      <div id="results-table-top" class="dim">&#x2560;&#x2550;&#x2550;&#x2550;&#x2550;&#x2564;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2564;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2563;</div>
+
+      <div id="results-list"></div>
+
+      <div id="results-table-bottom" class="dim" style="display:none">&#x2560;&#x2550;&#x2550;&#x2550;&#x2550;&#x2567;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2567;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2563;</div>
+    </div>
+
+    <!-- Player section -->
+    <div id="player-section" class="player-section">
+      <div>&#x2551;</div>
+      <div>&#x2551; &gt;&gt; NOW PLAYING: <span id="player-track-name" class="bright player-track-name"></span></div>
+      <div id="player-progress-row" class="player-progress-row">&#x2551; <span id="progress-display"></span> <span id="player-time" class="dim">0:00</span></div>
+      <div>&#x2551;</div>
+    </div>
+
+    <!-- Footer -->
+    <div id="screen-footer" style="display:none">
+      <div>&#x255A;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x2550;&#x255D;</div>
+    </div>
+
+    <!-- New search -->
+    <div id="new-search-row" style="display:none; margin-top:8px">
+      <button class="crt-btn" onclick="newSearch()">[NEW SEARCH]</button>
+    </div>
+  </div>
+
+  <div id="yt-player-host"><div id="yt-player"></div></div>
+
+  <script>
+    const API = "https://api.shovelfordiscogs.com";
+
+    /* ── YouTube IFrame API ── */
+    let ytPlayer = null;
+    let ytReady = false;
+    let progressInterval = null;
+
+    const ytApi = document.createElement("script");
+    ytApi.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(ytApi);
+
+    window.onYouTubeIframeAPIReady = function () {
+      ytPlayer = new YT.Player("yt-player", {
+        height: "1",
+        width: "1",
+        playerVars: { playsinline: 1, controls: 0 },
+        events: {
+          onReady: () => { ytReady = true; },
+          onStateChange: onYTStateChange,
+          onError: () => { playNext(); },
+        },
+      });
+    };
+
+    function onYTStateChange(e) {
+      if (e.data === YT.PlayerState.PLAYING) {
+        isPlaying = true;
+        startProgressTimer();
+      } else if (e.data === YT.PlayerState.PAUSED) {
+        isPlaying = false;
+        stopProgressTimer();
+      } else if (e.data === YT.PlayerState.ENDED) {
+        stopProgressTimer();
+        playNext();
+      }
+    }
+
+    function startProgressTimer() {
+      stopProgressTimer();
+      progressInterval = setInterval(updateProgressBar, 250);
+    }
+
+    function stopProgressTimer() {
+      if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
+    }
+
+    function updateProgressBar() {
+      if (!ytPlayer || !ytPlayer.getCurrentTime) return;
+      const cur = ytPlayer.getCurrentTime();
+      const dur = ytPlayer.getDuration();
+      if (dur <= 0) return;
+
+      const pct = cur / dur;
+      const totalBlocks = 36;
+      const filled = Math.round(pct * totalBlocks);
+      const bar = "\u2588".repeat(filled) + "\u2591".repeat(totalBlocks - filled);
+      document.getElementById("progress-display").textContent = "[" + bar + "]";
+      document.getElementById("player-time").textContent = formatTime(cur);
+    }
+
+    /* ── Player state ── */
+    let playlist = [];
+    let currentPlaylistIdx = -1;
+    let isPlaying = false;
+
+    function extractVideoId(uri) {
+      try {
+        const url = new URL(uri);
+        return url.searchParams.get("v");
+      } catch { return null; }
+    }
+
+    function formatTime(seconds) {
+      const s = Math.floor(seconds);
+      return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+    }
+
+    function playTrack(entry) {
+      if (!ytReady) return;
+      ytPlayer.loadVideoById(entry.videoId);
+      currentPlaylistIdx = playlist.indexOf(entry);
+      isPlaying = true;
+
+      const playerSection = document.getElementById("player-section");
+      playerSection.classList.add("visible");
+      document.getElementById("player-track-name").textContent = entry.trackName;
+
+      const totalBlocks = 36;
+      document.getElementById("progress-display").textContent =
+        "[" + "\u2591".repeat(totalBlocks) + "]";
+      document.getElementById("player-time").textContent = "0:00";
+
+      updatePlayIcons();
+    }
+
+    function updatePlayIcons() {
+      document.querySelectorAll(".play-btn").forEach(el => {
+        const idx = Number(el.dataset.playlistIdx);
+        if (idx === currentPlaylistIdx) {
+          el.textContent = "[\u25b6\u25b6]";
+          el.classList.add("active");
+        } else {
+          el.textContent = "[>>]";
+          el.classList.remove("active");
+        }
+      });
+    }
+
+    function playNext() {
+      const next = currentPlaylistIdx + 1;
+      if (next < playlist.length) {
+        playTrack(playlist[next]);
+      } else {
+        isPlaying = false;
+      }
+    }
+
+    // Play/pause on progress bar click
+    document.getElementById("player-progress-row").addEventListener("click", () => {
+      if (!ytPlayer || !ytPlayer.getPlayerState) return;
+      const state = ytPlayer.getPlayerState();
+      if (state === YT.PlayerState.PLAYING) {
+        ytPlayer.pauseVideo();
+      } else {
+        ytPlayer.playVideo();
+      }
+    });
+
+    /* ── New search ── */
+    function newSearch() {
+      playlist = [];
+      currentPlaylistIdx = -1;
+      isPlaying = false;
+      stopProgressTimer();
+      if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
+
+      document.getElementById("results-section").classList.remove("visible");
+      document.getElementById("player-section").classList.remove("visible");
+      document.getElementById("screen-footer").style.display = "none";
+      document.getElementById("new-search-row").style.display = "none";
+      document.getElementById("results-list").innerHTML = "";
+      document.getElementById("results-table-bottom").style.display = "none";
+      document.getElementById("results-status").textContent = "";
+      document.getElementById("status-row").style.display = "none";
+
+      document.getElementById("input-section").style.display = "block";
+      document.getElementById("input").focus();
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    /* ── Row separator (box-drawing) ── */
+    function makeRowSep() {
+      return "\u255F" + "\u2500".repeat(4) + "\u253C" + "\u2500".repeat(23) + "\u253C" + "\u2500".repeat(29) + "\u2562";
+    }
+
+    /* ── Match logic ── */
+    let rowCount = 0;
+
+    async function doMatch() {
+      const text = document.getElementById("input").value.trim();
+      if (!text) return;
+
+      const btn = document.getElementById("submit");
+      const statusRow = document.getElementById("status-row");
+      const statusText = document.getElementById("status-text");
+      const resultsList = document.getElementById("results-list");
+      const resultsSection = document.getElementById("results-section");
+      const resultsStatus = document.getElementById("results-status");
+
+      btn.disabled = true;
+      resultsList.innerHTML = "";
+      playlist = [];
+      currentPlaylistIdx = -1;
+      rowCount = 0;
+
+      // Hide input, show status
+      document.getElementById("input-section").style.display = "none";
+      statusRow.style.display = "block";
+      statusText.textContent = "Cleaning tracklist\u2026";
+      statusText.classList.add("loading");
+      document.getElementById("results-table-bottom").style.display = "none";
+      document.getElementById("screen-footer").style.display = "none";
+      document.getElementById("new-search-row").style.display = "none";
+      document.getElementById("player-section").classList.remove("visible");
+
+      const t0 = Date.now();
+      let slots = [];
+
+      try {
+        const res = await fetch(`${API}/tracklist/match`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          statusText.textContent = "ERROR: " + (data.error || "Something went wrong");
+          statusText.classList.remove("loading");
+          btn.disabled = false;
+          return;
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const msg = JSON.parse(line);
+
+            if (msg.type === "error") {
+              statusText.textContent = "ERROR: " + msg.error;
+              statusText.classList.remove("loading");
+              btn.disabled = false;
+              return;
+            }
+
+            if (msg.type === "cleaned") {
+              statusRow.style.display = "none";
+              statusText.classList.remove("loading");
+              resultsSection.classList.add("visible");
+              resultsStatus.textContent = `0/${msg.total}`;
+
+              slots = msg.lines.map((l, i) => {
+                const isUnknown = l === "?";
+                return { line: l, isUnknown, rendered: false };
+              });
+            }
+
+            if (msg.type === "result") {
+              const slot = slots[msg.index];
+              if (!slot || slot.isUnknown || msg.input === "?") continue;
+
+              // Add separator between rows
+              if (rowCount > 0) {
+                const sepEl = document.createElement("div");
+                sepEl.className = "row-sep dim";
+                sepEl.textContent = makeRowSep();
+                resultsList.appendChild(sepEl);
+              }
+
+              const rowEl = document.createElement("div");
+              rowEl.className = "result-row";
+              rowEl.style.animationDelay = `${rowCount * 100}ms`;
+              rowEl.innerHTML = renderCRTRow(msg, msg.index);
+              resultsList.appendChild(rowEl);
+              rowCount++;
+
+              // Wire up play button
+              const videoMatch = msg.matches.find(m => m.video && m.video.uri && extractVideoId(m.video.uri));
+              if (videoMatch) {
+                const vid = extractVideoId(videoMatch.video.uri);
+                if (vid) {
+                  const entry = { index: msg.index, videoId: vid, trackName: msg.input || videoMatch.track_title };
+                  const pIdx = playlist.push(entry) - 1;
+                  const playBtn = rowEl.querySelector(".play-btn");
+                  if (playBtn) {
+                    playBtn.dataset.playlistIdx = pIdx;
+                    playBtn.addEventListener("click", (e) => {
+                      e.stopPropagation();
+                      playTrack(entry);
+                    });
+                  }
+                }
+              }
+
+              if (msg.total != null) {
+                const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+                resultsStatus.textContent = `${msg.matched}/${msg.total} \u00b7 ${elapsed}s`;
+              }
+            }
+
+            if (msg.type === "done") {
+              const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+              resultsStatus.textContent = `${msg.matched}/${msg.total} \u00b7 ${elapsed}s`;
+
+              // Sort playlist
+              playlist.sort((a, b) => a.index - b.index);
+
+              // Show table bottom, footer, new search
+              document.getElementById("results-table-bottom").style.display = "block";
+              document.getElementById("screen-footer").style.display = "block";
+              document.getElementById("new-search-row").style.display = "block";
+            }
+          }
+        }
+      } catch (err) {
+        statusText.textContent = "ERROR: " + err.message;
+        statusText.classList.remove("loading");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function renderCRTRow(r, idx) {
+      const num = String(idx + 1).padStart(2, "0");
+      const trackName = esc(r.input || "?");
+
+      if (r.error || r.matches.length === 0) {
+        return `
+          <div class="result-row-inner">
+            <span class="result-num dim">${num}</span>
+            <span class="result-track">${trackName}</span>
+            <span class="result-match warn">** NO MATCH **</span>
+          </div>
+        `;
+      }
+
+      const m = r.matches[0];
+      const url = `https://www.discogs.com/release/${m.release_id}`;
+      const hasVideo = m.video && m.video.uri && extractVideoId(m.video.uri);
+      const playBtn = hasVideo
+        ? `<span class="play-btn" data-video-id="${extractVideoId(m.video.uri)}">[>>]</span>`
+        : "";
+
+      let labelLine = "";
+      if (m.labels && m.labels.length > 0) {
+        labelLine = `<div class="match-line dim">${esc(m.labels[0])}</div>`;
+      }
+
+      return `
+        <div class="result-row-inner">
+          <span class="result-num dim">${num}</span>
+          <span class="result-track">${trackName}</span>
+          <span class="result-match">
+            <div class="match-line"><a class="crt-link" href="${url}" target="_blank">${esc(m.artist_name)}</a></div>
+            <div class="match-line dim"><a class="crt-link" href="${url}" target="_blank">${esc(m.release_title)}</a></div>
+            ${labelLine}
+            ${playBtn ? `<div class="match-line">${playBtn}</div>` : ""}
+          </span>
+        </div>
+      `;
+    }
+
+    function esc(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    /* ── Keyboard shortcut ── */
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+    document.getElementById("shortcut-key").textContent = isMac ? "\u2318+Enter" : "Ctrl+Enter";
+
+    document.getElementById("input").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) doMatch();
+    });
+  </script>
+</body>
+</html>
