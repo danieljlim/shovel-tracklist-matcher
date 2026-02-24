@@ -695,6 +695,9 @@
       a.href = `https://www.youtube.com/watch?v=${entry.videoId}`;
       a.target = "_blank";
       a.textContent = entry.trackName;
+      a.addEventListener("click", () => {
+        if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+      });
       trackEl.textContent = "";
       trackEl.appendChild(a);
       document.getElementById("player-time").textContent = "";
@@ -932,6 +935,31 @@
 
     document.getElementById("input").addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) doMatch();
+    });
+
+    // Arrow key shortcuts for player (only when not typing in textarea)
+    document.addEventListener("keydown", (e) => {
+      if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+      if (!ytPlayer || !ytReady) return;
+
+      switch (e.key) {
+        case "ArrowUp":
+          e.preventDefault();
+          if (currentPlaylistIdx > 0) playTrack(playlist[currentPlaylistIdx - 1]);
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          playNext();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          if (ytPlayer.getCurrentTime) ytPlayer.seekTo(Math.max(0, ytPlayer.getCurrentTime() - 15), true);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          if (ytPlayer.getCurrentTime) ytPlayer.seekTo(ytPlayer.getCurrentTime() + 15, true);
+          break;
+      }
     });
   </script>
 </body>
